@@ -418,18 +418,17 @@
 <script>
     const { jsPDF } = window.jspdf;
 
-    // 🔥 👇👇 REAL FIREBASE CONFIG ADDED BELOW 👇👇 🔥
-    // IMPORTANT: Make sure these keys are YOUR real keys, otherwise data won't save!
+    // 🔥 👇👇 CONFIG UPDATED WITH YOUR NEW KEYS (jaffaz-inventory) 👇👇 🔥
     const firebaseConfig = {
-        apiKey: "AIzaSyD-xxxxxxxxxxxxxxxxxxxx",
-        authDomain: "jaffaz-pos.firebaseapp.com",
-        databaseURL: "https://jaffaz-pos-default-rtdb.firebaseio.com",
-        projectId: "jaffaz-pos",
-        storageBucket: "jaffaz-pos.appspot.com",
-        messagingSenderId: "123456789",
-        appId: "1:123456789:web:xxxxxx"
+        apiKey: "AIzaSyDs-7Dkorv2R7OTffLygPAdbfn3-Dgjb4I",
+        authDomain: "jaffaz-inventory.firebaseapp.com",
+        databaseURL: "https://jaffaz-inventory-default-rtdb.firebaseio.com",
+        projectId: "jaffaz-inventory",
+        storageBucket: "jaffaz-inventory.firebasestorage.app",
+        messagingSenderId: "955779017403",
+        appId: "1:955779017403:web:ebe32fe48d1b4ef06c979e"
     };
-    // 🔥 👆👆 REAL FIREBASE CONFIG ADDED ABOVE 👆👆 🔥
+    // 🔥 👆👆 CONFIG UPDATED WITH YOUR NEW KEYS (jaffaz-inventory) 👆👆 🔥
 
     // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
@@ -502,8 +501,6 @@
         const today = new Date().toDateString();
         
         if (lastBackupDate !== today) {
-            // Optional: You can uncomment alert if needed
-            // alert("⚠️ Reminder: Please Backup your Data today to avoid loss!");
             localStorage.setItem('IMS_LastBackup_Date', today); 
         }
     }
@@ -554,7 +551,7 @@
             bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
             alert("Settings Applied & Syncing Online!");
         })
-        .catch(err => alert("Error saving settings: " + err.message));
+        .catch(err => alert("Connection Error! Check Keys or Rules: " + err.message));
     }
 
     // Function to Clear All Data (From Firebase)
@@ -909,10 +906,10 @@
     }
 
     function saveAndRender() {
-        // 🔥 SAVE TO FIREBASE
+        // 🔥 SAVE TO FIREBASE with Error Alert
         db.ref('inventory_data').set(inventory)
         .then(() => console.log("Data Saved Online"))
-        .catch(err => alert("Error saving data: " + err.message));
+        .catch(err => alert("ERROR SAVING DATA: " + err.message + "\nCheck your Firebase Rules or Internet!"));
         
         renderTable();
     }
@@ -964,6 +961,7 @@
                     alert("❌ Invalid File.");
                 }
             } catch (err) { alert("❌ Error reading file."); }
+            input.value = ''; // Reset input to allow same file again
         };
         reader.readAsText(file);
     }
