@@ -6,10 +6,14 @@
     <title id="pageTitle">Inventory Pro Max</title>
     <link id="faviconLink" rel="icon" href="https://cdn-icons-png.flaticon.com/512/2897/2897830.png" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
     <style>
         /* Dynamic Variables for Theme */
@@ -338,7 +342,7 @@
 <div class="modal fade" id="settingsModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content p-3">
-            <div class="text-center"><h5>⚙️ System Settings</h5></div>
+            <div class="text-center"><h5>⚙️ System Settings (Online)</h5></div>
             
             <label class="small fw-bold mt-2">Business Name</label>
             <input type="text" id="setBizName" class="form-control mb-2" placeholder="Business Name">
@@ -382,11 +386,11 @@
             <button onclick="backupData()" class="btn btn-outline-success w-100 mb-2 fw-bold">📥 Download Backup File</button>
             <button onclick="document.getElementById('restoreFile').click()" class="btn btn-outline-warning w-100 fw-bold">📤 Restore Data (Upload)</button>
             <input type="file" id="restoreFile" style="display: none;" onchange="restoreData(this)" accept=".json">
-            <small class="text-danger d-block mt-2" style="font-size: 0.7rem;">Warning: Restoring will delete all current data and replace it with backup.</small>
+            <small class="text-danger d-block mt-2" style="font-size: 0.7rem;">Warning: Restoring will overwrite Online Database.</small>
             
             <hr>
             <h6 class="text-danger fw-bold text-start">⚠️ Danger Zone</h6>
-            <button class="btn btn-danger w-100 fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#resetZone">🗑️ Clear All Data</button>
+            <button class="btn btn-danger w-100 fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#resetZone">🗑️ Clear All Online Data</button>
             <div class="collapse mt-2" id="resetZone">
                 <div class="card card-body border-danger">
                     <small class="text-danger mb-2 fw-bold">Enter Secret Code to wipe everything:</small>
@@ -413,8 +417,26 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     const { jsPDF } = window.jspdf;
-    let inventory = JSON.parse(localStorage.getItem('MasterInventoryDB')) || [];
-    let settings = JSON.parse(localStorage.getItem('IMS_Settings')) || { 
+
+    // 🔥 👇👇 REAL FIREBASE CONFIG ADDED BELOW 👇👇 🔥
+    const firebaseConfig = {
+        apiKey: "AIzaSyD-xxxxxxxxxxxxxxxxxxxx",
+        authDomain: "jaffaz-pos.firebaseapp.com",
+        databaseURL: "https://jaffaz-pos-default-rtdb.firebaseio.com",
+        projectId: "jaffaz-pos",
+        storageBucket: "jaffaz-pos.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "1:123456789:web:xxxxxx"
+    };
+    // 🔥 👆👆 REAL FIREBASE CONFIG ADDED ABOVE 👆👆 🔥
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Data Variables
+    let inventory = [];
+    let settings = { 
         name: 'Inventory Pro Max', 
         logo: 'https://cdn-icons-png.flaticon.com/512/2897/2897830.png',
         themeColor: '#2c3e50',
@@ -432,6 +454,27 @@
     
     // Variable for Historical View
     let viewingDate = null;
+
+    // 🔥 LOAD DATA FROM FIREBASE ON STARTUP
+    db.ref('inventory_data').on('value', (snapshot) => {
+        const val = snapshot.val();
+        if(val) {
+            inventory = val;
+            renderTable();
+        } else {
+            inventory = []; // Empty if no data online
+            renderTable();
+        }
+    });
+
+    db.ref('inventory_settings').on('value', (snapshot) => {
+        const val = snapshot.val();
+        if(val) {
+            settings = val;
+            tempLogoBase64 = settings.logo;
+            applyBranding();
+        }
+    });
 
     function applyBranding() {
         document.getElementById('displayBizName').innerText = settings.name;
@@ -457,7 +500,8 @@
         const today = new Date().toDateString();
         
         if (lastBackupDate !== today) {
-            alert("⚠️ Reminder: Please Backup your Data today to avoid loss!");
+            // Optional: You can uncomment alert if needed
+            // alert("⚠️ Reminder: Please Backup your Data today to avoid loss!");
             localStorage.setItem('IMS_LastBackup_Date', today); 
         }
     }
@@ -502,19 +546,22 @@
         settings.fontFamily = document.getElementById('themeFontFamily').value;
         settings.fontSize = document.getElementById('themeFontSize').value;
 
-        localStorage.setItem('IMS_Settings', JSON.stringify(settings));
-        applyBranding();
-        bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
-        alert("Settings Applied Successfully!");
+        // 🔥 SAVE TO FIREBASE
+        db.ref('inventory_settings').set(settings)
+        .then(() => {
+            bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+            alert("Settings Applied & Syncing Online!");
+        })
+        .catch(err => alert("Error saving settings: " + err.message));
     }
 
-    // NEW: Function to Clear All Data
+    // Function to Clear All Data (From Firebase)
     function clearAllData() {
         const pass = document.getElementById('resetPassword').value;
         if (pass === '4472') {
-            if(confirm("Are you 100% sure? This will delete ALL Inventory Data. This cannot be undone.")) {
-                localStorage.removeItem('MasterInventoryDB');
-                localStorage.removeItem('IMS_Settings');
+            if(confirm("Are you 100% sure? This will delete ALL Inventory Data ONLINE. This cannot be undone.")) {
+                db.ref('inventory_data').remove();
+                db.ref('inventory_settings').remove();
                 location.reload();
             }
         } else {
@@ -529,7 +576,6 @@
         let cat = document.getElementById('iCat').value || "General";
         if(!name || isNaN(qty)) return;
         
-        // qty here acts as "Lifetime Total Added" initially. Remaining starts same as qty.
         let newItem = { id: Date.now(), name, qty, price, category: cat, remaining: qty, usedTotal: 0, 
             history: [{ time: new Date().toLocaleString(), user: currentRole, action: 'Initial', amount: qty, bal: qty }] 
         };
@@ -588,24 +634,26 @@
         let hasData = false;
 
         inventory.forEach(item => {
-            item.history.forEach(log => {
-                const logDate = new Date(log.time).toDateString();
-                
-                if (log.action === 'Usage' && logDate === targetDate) {
-                    const cost = log.amount * (item.price || 0);
-                    grandTotal += cost;
-                    hasData = true;
+            if(item.history) {
+                item.history.forEach(log => {
+                    const logDate = new Date(log.time).toDateString();
                     
-                    tbody.innerHTML += `
-                        <tr>
-                            <td class="fw-bold">${item.name}</td>
-                            <td>${log.user}</td>
-                            <td>${log.amount}</td>
-                            <td>${cost.toLocaleString()}</td>
-                        </tr>
-                    `;
-                }
-            });
+                    if (log.action === 'Usage' && logDate === targetDate) {
+                        const cost = log.amount * (item.price || 0);
+                        grandTotal += cost;
+                        hasData = true;
+                        
+                        tbody.innerHTML += `
+                            <tr>
+                                <td class="fw-bold">${item.name}</td>
+                                <td>${log.user}</td>
+                                <td>${log.amount}</td>
+                                <td>${cost.toLocaleString()}</td>
+                            </tr>
+                        `;
+                    }
+                });
+            }
         });
 
         if (!hasData) {
@@ -641,12 +689,14 @@
         let stockAtDate = 0;
         let found = false;
 
-        for (let i = item.history.length - 1; i >= 0; i--) {
-            let logTime = new Date(item.history[i].time);
-            if (logTime <= targetDate) {
-                stockAtDate = item.history[i].bal;
-                found = true;
-                break;
+        if(item.history) {
+            for (let i = item.history.length - 1; i >= 0; i--) {
+                let logTime = new Date(item.history[i].time);
+                if (logTime <= targetDate) {
+                    stockAtDate = item.history[i].bal;
+                    found = true;
+                    break;
+                }
             }
         }
         
@@ -841,9 +891,11 @@
     function showHistory(id) {
         let item = inventory.find(i => i.id === id);
         let html = `<h6>History: ${item.name} (Price: ${item.price || 0})</h6><div class="list-group list-group-flush">`;
-        item.history.slice().reverse().forEach(h => {
-            html += `<div class="list-group-item d-flex justify-content-between p-2 small"><div><strong>${h.action} (${h.amount})</strong><br>${h.time}</div><span>Bal: ${h.bal} | By: ${h.user}</span></div>`;
-        });
+        if(item.history) {
+            item.history.slice().reverse().forEach(h => {
+                html += `<div class="list-group-item d-flex justify-content-between p-2 small"><div><strong>${h.action} (${h.amount})</strong><br>${h.time}</div><span>Bal: ${h.bal} | By: ${h.user}</span></div>`;
+            });
+        }
         document.getElementById('historyContent').innerHTML = html + '</div>';
         new bootstrap.Modal(document.getElementById('historyModal')).show();
     }
@@ -855,7 +907,12 @@
     }
 
     function saveAndRender() {
-        localStorage.setItem('MasterInventoryDB', JSON.stringify(inventory)); renderTable();
+        // 🔥 SAVE TO FIREBASE
+        db.ref('inventory_data').set(inventory)
+        .then(() => console.log("Data Saved Online"))
+        .catch(err => alert("Error saving data: " + err.message));
+        
+        renderTable();
     }
 
     function backupData() {
@@ -876,7 +933,7 @@
         const file = input.files[0];
         if (!file) return;
         
-        if(!confirm("⚠️ Warning: Restoring data will DELETE current data. Continue?")) {
+        if(!confirm("⚠️ Warning: Restoring data will overwrite ONLINE data. Continue?")) {
             input.value = ''; return;
         }
 
@@ -885,9 +942,11 @@
             try {
                 const data = JSON.parse(e.target.result);
                 if (data.inventory && data.settings) {
-                    localStorage.setItem('MasterInventoryDB', JSON.stringify(data.inventory));
-                    localStorage.setItem('IMS_Settings', JSON.stringify(data.settings));
-                    alert("✅ Data Restored!");
+                    // 🔥 UPLOAD RESTORED DATA TO FIREBASE
+                    db.ref('inventory_data').set(data.inventory);
+                    db.ref('inventory_settings').set(data.settings);
+                    
+                    alert("✅ Data Restored to Online Database!");
                     location.reload();
                 } else {
                     alert("❌ Invalid File.");
