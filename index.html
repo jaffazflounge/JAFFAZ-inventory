@@ -383,7 +383,7 @@
 
             <hr>
             <h6 class="text-start">💾 Data Backup & Restore</h6>
-            <button onclick="backupData()" class="btn btn-outline-success w-100 mb-2 fw-bold">📥 Download Backup File</button>
+            <button onclick="backupData()" class="btn btn-outline-success w-100 mb-2 fw-bold">📥 Download Backup File (Blob)</button>
             <button onclick="document.getElementById('restoreFile').click()" class="btn btn-outline-warning w-100 fw-bold">📤 Restore Data (Upload)</button>
             <input type="file" id="restoreFile" style="display: none;" onchange="restoreData(this)" accept=".json">
             <small class="text-danger d-block mt-2" style="font-size: 0.7rem;">Warning: Restoring will overwrite Online Database.</small>
@@ -419,6 +419,7 @@
     const { jsPDF } = window.jspdf;
 
     // 🔥 👇👇 REAL FIREBASE CONFIG ADDED BELOW 👇👇 🔥
+    // IMPORTANT: Make sure these keys are YOUR real keys, otherwise data won't save!
     const firebaseConfig = {
         apiKey: "AIzaSyD-xxxxxxxxxxxxxxxxxxxx",
         authDomain: "jaffaz-pos.firebaseapp.com",
@@ -455,11 +456,12 @@
     // Variable for Historical View
     let viewingDate = null;
 
-    // 🔥 LOAD DATA FROM FIREBASE ON STARTUP
+    // 🔥 FIXED: Data Loading Logic (Ensuring it's always an Array)
     db.ref('inventory_data').on('value', (snapshot) => {
         const val = snapshot.val();
         if(val) {
-            inventory = val;
+            // FIX: Convert Object to Array to handle deletion gaps or object-formatted data
+            inventory = Object.values(val); 
             renderTable();
         } else {
             inventory = []; // Empty if no data online
@@ -920,7 +922,7 @@
         localStorage.setItem('IMS_LastBackup_Date', today); 
 
         const data = { inventory: inventory, settings: settings };
-        // FIXED: Using Blob to handle larger data sizes without crashing
+        // 🔥 FIXED: Using Blob to handle larger data correctly
         const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
         const url = URL.createObjectURL(blob);
         
