@@ -4,36 +4,119 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="pageTitle">Inventory Pro Max</title>
+    <link id="faviconLink" rel="icon" href="https://cdn-icons-png.flaticon.com/512/2897/2897830.png" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
-        :root { --primary: #2c3e50; --accent: #3498db; }
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; margin: 0; }
+        /* Dynamic Variables for Theme */
+        :root { 
+            --primary: #2c3e50; 
+            --accent: #3498db; 
+            --bg-color: #f8f9fa;
+            --font-main: 'Segoe UI', sans-serif;
+            --font-size-base: 16px;
+        }
         
-        /* Responsive Sidebar */
-        .sidebar { background: var(--primary); color: white; min-height: 100vh; padding: 20px; width: 250px; transition: all 0.3s; flex-shrink: 0; }
-        .logo-img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid white; margin-bottom: 15px; background: white; }
+        body { 
+            background-color: var(--bg-color); 
+            font-family: var(--font-main); 
+            font-size: var(--font-size-base);
+            margin: 0; 
+        }
+        
+        /* Sidebar */
+        .sidebar { 
+            background: var(--primary); 
+            color: white; 
+            min-height: 100vh; 
+            padding: 20px; 
+            width: 300px; 
+            transition: all 0.3s; 
+            flex-shrink: 0; 
+            overflow-y: auto; 
+            scrollbar-width: thin;
+        }
+        
+        /* Logo */
+        .logo-img { 
+            width: 80px; 
+            height: 80px; 
+            border-radius: 50%; 
+            object-fit: contain; 
+            border: 3px solid white; 
+            margin-bottom: 15px; 
+            background: white; 
+        }
         
         .main-content { padding: 20px; flex-grow: 1; overflow-x: hidden; }
         
         .stats-card { border: none; border-radius: 12px; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        .top-item-card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); height: 100%; }
         
-        /* Table Responsive */
         .table-responsive { border-radius: 10px; background: white; }
-        .badge-low { background-color: #e74c3c; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.6;} 100% {opacity: 1;} }
+        
+        /* Continuous Slow Blinking for Low Stock Rows */
+        @keyframes dangerPulse { 
+            0% { background-color: #ffcccc; }   /* Light Red */
+            50% { background-color: #ff8080; }  /* Darker Red */
+            100% { background-color: #ffcccc; } /* Light Red */
+        }
+
+        .row-low-stock > * {
+            animation: dangerPulse 1.5s infinite ease-in-out !important;
+            color: #721c24 !important; /* Dark Text for readability */
+            font-weight: bold;
+        }
+
+        .badge-low { background-color: #e74c3c; }
         
         #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a252f; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .admin-controls { display: none; }
 
-        /* Media Queries for Mobile */
+        /* Usage List Styling */
+        .usage-item {
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid #eee;
+            padding: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+        .usage-item:hover {
+            background-color: #f1f1f1;
+            border-radius: 5px;
+        }
+
+        #undoToast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1050;
+            display: none;
+            min-width: 300px;
+        }
+        
+        /* Historical Mode Banner */
+        .historical-mode {
+            border: 2px dashed #e67e22;
+            background: #fff3e0;
+        }
+
+        /* Report Modal Custom Styles */
+        .report-summary-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            margin-top: 15px;
+        }
+
         @media (max-width: 768px) {
             .sidebar { width: 100%; min-height: auto; padding: 10px; position: relative; }
             .d-flex-main { flex-direction: column; }
@@ -45,6 +128,16 @@
 </head>
 <body>
 
+<div id="undoToast" class="toast align-items-center text-white bg-dark border-0 show" role="alert" aria-live="assertive" aria-atomic="true">
+  <div class="d-flex">
+    <div class="toast-body">
+      Action Performed. <span id="undoTimer">60</span>s to Undo.
+    </div>
+    <button type="button" class="btn btn-warning btn-sm m-2 fw-bold" onclick="performUndo()">↩ Undo</button>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="document.getElementById('undoToast').style.display='none'"></button>
+  </div>
+</div>
+
 <div id="loginOverlay">
     <div class="card p-4 shadow-lg border-0" style="width: 100%; max-width: 380px;">
         <div class="text-center mb-4">
@@ -52,7 +145,7 @@
             <small class="text-muted">Enter password to access dashboard</small>
         </div>
         <div class="mb-3">
-            <label class="form-label fw-bold small">Role Select Karein</label>
+            <label class="form-label fw-bold small">Select Role</label>
             <select id="userRole" class="form-select text-center mb-3">
                 <option value="Admin">Admin (Full Access)</option>
                 <option value="Staff">Staff (Usage Only)</option>
@@ -61,7 +154,7 @@
             <input type="password" id="loginPassword" class="form-control text-center" placeholder="PLEASE ENTER 6 DIGITS PASSWORD">
         </div>
         <button onclick="login()" class="btn btn-primary w-100 py-2 fw-bold">Login</button>
-        <div id="loginError" class="text-danger small text-center mt-2" style="display:none;">❌ Ghalat Password!</div>
+        <div id="loginError" class="text-danger small text-center mt-2" style="display:none;">❌ Invalid Password!</div>
     </div>
 </div>
 
@@ -70,8 +163,24 @@
         <img id="displayLogo" src="https://cdn-icons-png.flaticon.com/512/2897/2897830.png" class="logo-img">
         <h5 id="displayBizName" class="text-center mb-3 fw-bold">My Business</h5>
         <span class="badge bg-warning text-dark mb-4 px-3" id="activeUserBadge">Role</span>
-        <hr class="w-100 text-white d-none d-md-block">
-        <button onclick="location.reload()" class="btn btn-outline-danger btn-sm w-100 mt-md-auto">Logout</button>
+        
+        <hr class="w-100 text-white">
+
+        <div class="w-100 mb-3">
+            <small class="text-white-50 fw-bold ms-1">📊 Stock Overview</small>
+            <div class="card border-0 p-2 mt-1" style="background: rgba(255,255,255,0.95);">
+                <canvas id="stockChart" style="max-height: 100px;"></canvas>
+            </div>
+        </div>
+
+        <div class="w-100 flex-grow-1 mb-3" style="min-height: 200px;">
+            <small class="text-white-50 fw-bold ms-1">🔄 Lifetime Stats (Total In / Out)</small>
+            <div class="card border-0 mt-1" style="background: white; height: 100%; overflow: hidden;">
+                <div id="topItemsList" class="p-2" style="height: 100%; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <button onclick="location.reload()" class="btn btn-outline-danger btn-sm w-100 mt-2">Logout</button>
     </div>
 
     <div class="main-content">
@@ -80,27 +189,28 @@
                 <h2 id="headerTitle" class="fw-bold m-0 text-dark h4 h2-md">Dashboard</h2>
             </div>
             <div class="col-6 text-end admin-controls">
+                <button class="btn btn-info text-white btn-sm shadow-sm me-1 fw-bold" onclick="openReportModal()">📅 Daily Report</button>
                 <button class="btn btn-dark btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#settingsModal">⚙️ Settings & Backup</button>
             </div>
         </div>
 
         <div class="row g-3 mb-4">
-            <div class="col-md-3 col-6 text-center">
+            <div class="col-md-4 col-12 text-center">
                 <div class="card stats-card bg-primary p-3">
                     <small>Total Items</small>
                     <h2 id="statTotal" class="m-0">0</h2>
                 </div>
             </div>
-            <div class="col-md-3 col-6 text-center">
+            <div class="col-md-4 col-12 text-center">
                 <div class="card stats-card bg-danger p-3">
                     <small>Low Stock</small>
                     <h2 id="statLow" class="m-0">0</h2>
                 </div>
             </div>
-            <div class="col-md-6">
-                <div class="top-item-card">
-                    <h6 class="text-muted fw-bold small">🔥 Top Usage Items</h6>
-                    <div id="topItemsList" class="mt-1" style="font-size: 0.85rem;"></div>
+            <div class="col-md-4 col-12 text-center">
+                <div class="card stats-card bg-success p-3">
+                    <small id="valueLabel">Total Stock Value (Live)</small>
+                    <h3 id="statValue" class="m-0">0</h3>
                 </div>
             </div>
         </div>
@@ -112,6 +222,20 @@
 
         <div class="card shadow-sm border-0 rounded-3">
             <div class="card-body p-3 p-md-4">
+                
+                <div class="row mb-3 p-2 bg-light rounded align-items-center border">
+                    <div class="col-md-3 col-12">
+                        <label class="small fw-bold">📅 Check Past Stock:</label>
+                    </div>
+                    <div class="col-md-5 col-12">
+                        <input type="date" id="historyDateInput" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-4 col-12 d-flex gap-2 mt-2 mt-md-0">
+                        <button onclick="filterByDate()" class="btn btn-sm btn-primary flex-grow-1">Check History</button>
+                        <button onclick="resetDateFilter()" class="btn btn-sm btn-secondary flex-grow-1">Reset (Live)</button>
+                    </div>
+                </div>
+
                 <div class="row mb-3 g-2">
                     <div class="col-md-8 col-12">
                         <input type="text" id="searchBar" class="form-control" placeholder="Search item..." onkeyup="renderTable()">
@@ -122,12 +246,12 @@
                 </div>
                 
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle" style="min-width: 600px;">
+                    <table class="table table-hover align-middle" style="min-width: 650px;" id="mainTable">
                         <thead class="table-dark">
                             <tr>
                                 <th>Item Info</th>
-                                <th>Stock</th>
-                                <th>Usage (Qty/Name)</th>
+                                <th>Current Stock & Value</th>
+                                <th id="usageHeader">Usage (Qty/Name)</th>
                                 <th>Balance</th>
                                 <th>Action</th>
                             </tr>
@@ -148,6 +272,7 @@
             <div class="modal-body">
                 <input type="text" id="iName" class="form-control mb-3" placeholder="Item Name">
                 <input type="number" id="iQty" class="form-control mb-3" placeholder="Stock Qty">
+                <input type="number" id="iPrice" class="form-control mb-3" placeholder="Price Per Item (Optional)">
                 <input type="text" id="iCat" class="form-control mb-3" placeholder="Category">
                 <button onclick="addItem()" class="btn btn-primary w-100">Save</button>
             </div>
@@ -155,23 +280,123 @@
     </div>
 </div>
 
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5>✏️ Edit Item Details</h5></div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <label class="small fw-bold">Item Name</label>
+                <input type="text" id="editName" class="form-control mb-3">
+                <label class="small fw-bold">Category</label>
+                <input type="text" id="editCat" class="form-control mb-3">
+                <label class="small fw-bold">Price (Rs.)</label>
+                <input type="number" id="editPrice" class="form-control mb-3">
+                <button onclick="updateItem()" class="btn btn-success w-100">Update Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="reportModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="fw-bold">📅 Daily Usage/Sales Report</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-center align-items-center mb-3">
+                    <label class="fw-bold me-2">Select Date:</label>
+                    <input type="date" id="reportDate" class="form-control w-auto" onchange="generateDailyReport()">
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped text-center align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Item Name</th>
+                                <th>Taken By (User)</th>
+                                <th>Qty Used</th>
+                                <th>Cost (Rs.)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportBody">
+                            </tbody>
+                    </table>
+                </div>
+
+                <div class="report-summary-box">
+                    <h5>Total Value of Stock Used Today</h5>
+                    <h2 class="fw-bold m-0" id="reportTotalDisplay">Rs. 0</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="settingsModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content text-center p-3">
-            <h5>Settings</h5>
-            <input type="text" id="setBizName" class="form-control mb-3" placeholder="Business Name">
-            <input type="file" id="logoFile" class="form-control mb-3" accept="image/*" onchange="previewLogo(this)">
-            <img id="logoPreview" src="" style="max-width: 100px; display: none;" class="mb-3 mx-auto rounded border">
+        <div class="modal-content p-3">
+            <div class="text-center"><h5>⚙️ System Settings</h5></div>
             
+            <label class="small fw-bold mt-2">Business Name</label>
+            <input type="text" id="setBizName" class="form-control mb-2" placeholder="Business Name">
+            
+            <label class="small fw-bold">Logo (Any Size/Format)</label>
+            <input type="file" id="logoFile" class="form-control mb-2" accept="image/*" onchange="previewLogo(this)">
+            <div class="text-center">
+                <img id="logoPreview" src="" style="max-width: 100px; display: none;" class="mb-2 rounded border">
+            </div>
+
+            <hr>
+            <h6 class="text-start">🎨 Theme & Fonts</h6>
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label class="small">Theme Color</label>
+                    <input type="color" id="themeColor" class="form-control form-control-color w-100" value="#2c3e50">
+                </div>
+                <div class="col-6">
+                     <label class="small">Font Size</label>
+                     <select id="themeFontSize" class="form-select">
+                        <option value="14">Small (14px)</option>
+                        <option value="16">Normal (16px)</option>
+                        <option value="18">Large (18px)</option>
+                        <option value="20">Extra Large</option>
+                     </select>
+                </div>
+                <div class="col-12">
+                    <label class="small">Font Style</label>
+                    <select id="themeFontFamily" class="form-select">
+                        <option value="'Segoe UI', sans-serif">Segoe UI (Clean)</option>
+                        <option value="'Arial', sans-serif">Arial (Classic)</option>
+                        <option value="'Courier New', monospace">Courier (Typewriter)</option>
+                        <option value="'Georgia', serif">Georgia (Professional)</option>
+                        <option value="'Verdana', sans-serif">Verdana (Wide)</option>
+                    </select>
+                </div>
+            </div>
+
             <hr>
             <h6 class="text-start">💾 Data Backup & Restore</h6>
             <button onclick="backupData()" class="btn btn-outline-success w-100 mb-2 fw-bold">📥 Download Backup File</button>
             <button onclick="document.getElementById('restoreFile').click()" class="btn btn-outline-warning w-100 fw-bold">📤 Restore Data (Upload)</button>
             <input type="file" id="restoreFile" style="display: none;" onchange="restoreData(this)" accept=".json">
-            <small class="text-danger d-block mt-2" style="font-size: 0.7rem;">Warning: Restore karne se purana data delete ho kar naya aa jayega.</small>
-            <hr>
+            <small class="text-danger d-block mt-2" style="font-size: 0.7rem;">Warning: Restoring will delete all current data and replace it with backup.</small>
             
-            <button onclick="saveSettings()" class="btn btn-dark w-100">Apply Settings</button>
+            <hr>
+            <h6 class="text-danger fw-bold text-start">⚠️ Danger Zone</h6>
+            <button class="btn btn-danger w-100 fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#resetZone">🗑️ Clear All Data</button>
+            <div class="collapse mt-2" id="resetZone">
+                <div class="card card-body border-danger">
+                    <small class="text-danger mb-2 fw-bold">Enter Secret Code to wipe everything:</small>
+                    <input type="password" id="resetPassword" class="form-control mb-2 text-center" placeholder="****">
+                    <button onclick="clearAllData()" class="btn btn-outline-danger btn-sm w-100">CONFIRM DELETE</button>
+                </div>
+            </div>
+            
+            <hr>
+            <button onclick="saveSettings()" class="btn btn-dark w-100">Apply All Settings</button>
         </div>
     </div>
 </div>
@@ -186,57 +411,59 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-    // --- FIREBASE CONFIGURATION START ---
-    const firebaseConfig = {
-        apiKey: "AIzaSyDs-7Dkorv2R7OTffLygPAdbfn3-Dgjb4I",
-        authDomain: "jaffaz-inventory.firebaseapp.com",
-        databaseURL: "https://jaffaz-inventory-default-rtdb.firebaseio.com",
-        projectId: "jaffaz-inventory",
-        storageBucket: "jaffaz-inventory.firebasestorage.app",
-        messagingSenderId: "955779017403",
-        appId: "1:955779017403:web:ebe32fe48d1b4ef06c979e"
-    };
-
-    // Firebase Initialize
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    // --- FIREBASE CONFIGURATION END ---
-
     const { jsPDF } = window.jspdf;
-    let inventory = []; // Data will load from Firebase
+    let inventory = JSON.parse(localStorage.getItem('MasterInventoryDB')) || [];
     let settings = JSON.parse(localStorage.getItem('IMS_Settings')) || { 
         name: 'Inventory Pro Max', 
-        logo: 'https://cdn-icons-png.flaticon.com/512/2897/2897830.png' 
+        logo: 'https://cdn-icons-png.flaticon.com/512/2897/2897830.png',
+        themeColor: '#2c3e50',
+        fontFamily: "'Segoe UI', sans-serif",
+        fontSize: "16"
     };
     let currentRole = "Staff";
     let tempLogoBase64 = settings.logo;
-
-    // --- ONLINE DATA FUNCTIONS ---
-    function loadOnlineData() {
-        // Firebase se data sunna (Listen)
-        db.ref('MasterInventoryDB').on('value', (snapshot) => {
-            const data = snapshot.val();
-            inventory = data ? Object.values(data) : [];
-            renderTable();
-        });
-    }
-
-    function saveAndRender() {
-        // Online Save
-        db.ref('MasterInventoryDB').set(inventory);
-        // Local Backup (Safety ke liye)
-        localStorage.setItem('MasterInventoryDB', JSON.stringify(inventory)); 
-        renderTable();
-    }
-    // ----------------------------
+    
+    // Undo Variables
+    let undoStack = null;
+    let undoTimer = null;
+    let undoInterval = null;
+    let chartInstance = null;
+    
+    // Variable for Historical View
+    let viewingDate = null;
 
     function applyBranding() {
         document.getElementById('displayBizName').innerText = settings.name;
         document.getElementById('headerTitle').innerText = settings.name;
+        document.getElementById('pageTitle').innerText = settings.name;
         document.getElementById('displayLogo').src = settings.logo;
+        document.getElementById('faviconLink').href = settings.logo;
+        
         document.getElementById('setBizName').value = settings.name;
+        document.getElementById('themeColor').value = settings.themeColor || '#2c3e50';
+        document.getElementById('themeFontFamily').value = settings.fontFamily || "'Segoe UI', sans-serif";
+        document.getElementById('themeFontSize').value = settings.fontSize || "16";
+
+        document.documentElement.style.setProperty('--primary', settings.themeColor || '#2c3e50');
+        document.documentElement.style.setProperty('--font-main', settings.fontFamily || "'Segoe UI', sans-serif");
+        document.documentElement.style.setProperty('--font-size-base', (settings.fontSize || "16") + 'px');
+        document.querySelector('.sidebar').style.background = settings.themeColor || '#2c3e50';
+        document.querySelector('.stats-card.bg-primary').style.backgroundColor = settings.themeColor || '#2c3e50';
+    }
+
+    function checkBackupReminder() {
+        const lastBackupDate = localStorage.getItem('IMS_LastBackup_Date');
+        const today = new Date().toDateString();
+        
+        if (lastBackupDate !== today) {
+            alert("⚠️ Reminder: Please Backup your Data today to avoid loss!");
+            localStorage.setItem('IMS_LastBackup_Date', today); 
+        }
+    }
+
+    window.onload = function() {
+        checkBackupReminder();
     }
 
     function previewLogo(input) {
@@ -262,10 +489,7 @@
             document.getElementById('loginOverlay').style.display = 'none';
             if(currentRole === "Admin") document.querySelectorAll('.admin-controls').forEach(c => c.style.display = 'block');
             applyBranding();
-            
-            // Login Successful - Load Data from Firebase
-            loadOnlineData();
-            
+            renderTable();
         } else {
             error.style.display = 'block';
         }
@@ -274,22 +498,159 @@
     function saveSettings() {
         settings.name = document.getElementById('setBizName').value || settings.name;
         settings.logo = tempLogoBase64;
+        settings.themeColor = document.getElementById('themeColor').value;
+        settings.fontFamily = document.getElementById('themeFontFamily').value;
+        settings.fontSize = document.getElementById('themeFontSize').value;
+
         localStorage.setItem('IMS_Settings', JSON.stringify(settings));
         applyBranding();
         bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
-        alert("Applied!");
+        alert("Settings Applied Successfully!");
+    }
+
+    // NEW: Function to Clear All Data
+    function clearAllData() {
+        const pass = document.getElementById('resetPassword').value;
+        if (pass === '4472') {
+            if(confirm("Are you 100% sure? This will delete ALL Inventory Data. This cannot be undone.")) {
+                localStorage.removeItem('MasterInventoryDB');
+                localStorage.removeItem('IMS_Settings');
+                location.reload();
+            }
+        } else {
+            alert("Incorrect Secret Password!");
+        }
     }
 
     function addItem() {
         let name = document.getElementById('iName').value;
         let qty = parseFloat(document.getElementById('iQty').value);
+        let price = parseFloat(document.getElementById('iPrice').value) || 0; 
         let cat = document.getElementById('iCat').value || "General";
         if(!name || isNaN(qty)) return;
-        inventory.push({ id: Date.now(), name, qty, category: cat, remaining: qty, usedTotal: 0, 
+        
+        // qty here acts as "Lifetime Total Added" initially. Remaining starts same as qty.
+        let newItem = { id: Date.now(), name, qty, price, category: cat, remaining: qty, usedTotal: 0, 
             history: [{ time: new Date().toLocaleString(), user: currentRole, action: 'Initial', amount: qty, bal: qty }] 
-        });
+        };
+        
+        inventory.push(newItem);
         saveAndRender();
+        activateUndo({ type: 'delete', id: newItem.id });
         bootstrap.Modal.getInstance(document.getElementById('addModal')).hide();
+    }
+
+    function openEditModal(id) {
+        let item = inventory.find(i => i.id === id);
+        if(!item) return;
+
+        document.getElementById('editId').value = item.id;
+        document.getElementById('editName').value = item.name;
+        document.getElementById('editCat').value = item.category;
+        document.getElementById('editPrice').value = item.price || 0;
+        
+        new bootstrap.Modal(document.getElementById('editModal')).show();
+    }
+
+    function updateItem() {
+        let id = parseInt(document.getElementById('editId').value);
+        let name = document.getElementById('editName').value;
+        let cat = document.getElementById('editCat').value;
+        let price = parseFloat(document.getElementById('editPrice').value);
+
+        let item = inventory.find(i => i.id === id);
+        if(item) {
+            item.name = name;
+            item.category = cat;
+            item.price = price;
+            saveAndRender();
+            bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+        }
+    }
+
+    // NEW FUNCTIONS FOR DAILY REPORT
+    function openReportModal() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('reportDate').value = today;
+        generateDailyReport();
+        new bootstrap.Modal(document.getElementById('reportModal')).show();
+    }
+
+    function generateDailyReport() {
+        const dateStr = document.getElementById('reportDate').value;
+        if (!dateStr) return;
+        
+        const targetDate = new Date(dateStr).toDateString(); 
+        const tbody = document.getElementById('reportBody');
+        tbody.innerHTML = '';
+        
+        let grandTotal = 0;
+        let hasData = false;
+
+        inventory.forEach(item => {
+            item.history.forEach(log => {
+                const logDate = new Date(log.time).toDateString();
+                
+                if (log.action === 'Usage' && logDate === targetDate) {
+                    const cost = log.amount * (item.price || 0);
+                    grandTotal += cost;
+                    hasData = true;
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="fw-bold">${item.name}</td>
+                            <td>${log.user}</td>
+                            <td>${log.amount}</td>
+                            <td>${cost.toLocaleString()}</td>
+                        </tr>
+                    `;
+                }
+            });
+        });
+
+        if (!hasData) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4">No stock used/sold on this date.</td></tr>`;
+        }
+
+        document.getElementById('reportTotalDisplay').innerText = "Rs. " + grandTotal.toLocaleString();
+    }
+
+    function filterByDate() {
+        const dateInput = document.getElementById('historyDateInput').value;
+        if(!dateInput) return alert("Please select a date first.");
+        
+        viewingDate = new Date(dateInput);
+        viewingDate.setHours(23, 59, 59, 999); // Set to end of day
+        
+        document.getElementById('valueLabel').innerText = `Stock Value on ${dateInput}`;
+        document.getElementById('mainTable').classList.add('historical-mode');
+        renderTable();
+    }
+
+    function resetDateFilter() {
+        viewingDate = null;
+        document.getElementById('historyDateInput').value = '';
+        document.getElementById('valueLabel').innerText = "Total Stock Value (Live)";
+        document.getElementById('mainTable').classList.remove('historical-mode');
+        renderTable();
+    }
+
+    function getHistoricalStock(item, targetDate) {
+        if (!targetDate) return item.remaining; 
+
+        let stockAtDate = 0;
+        let found = false;
+
+        for (let i = item.history.length - 1; i >= 0; i--) {
+            let logTime = new Date(item.history[i].time);
+            if (logTime <= targetDate) {
+                stockAtDate = item.history[i].bal;
+                found = true;
+                break;
+            }
+        }
+        
+        return found ? stockAtDate : 0;
     }
 
     function useStock(id) {
@@ -298,18 +659,78 @@
         if(isNaN(q) || !n) return;
         let item = inventory.find(i => i.id === id);
         if(q > item.remaining) return alert("Low Stock!");
+        
         item.remaining -= q; item.usedTotal += q;
         item.history.push({ time: new Date().toLocaleString(), user: n, action: 'Usage', amount: q, bal: item.remaining });
         saveAndRender();
+        activateUndo({ type: 'add', id: id, amount: q, user: n });
     }
 
     function restock(id) {
         let amt = parseFloat(prompt("Add Qty:"));
         if(isNaN(amt)) return;
         let item = inventory.find(i => i.id === id);
-        item.qty += amt; item.remaining += amt;
+        // HERE: item.qty tracks Total In (Lifetime), item.remaining tracks current balance
+        item.qty += amt; 
+        item.remaining += amt;
         item.history.push({ time: new Date().toLocaleString(), user: currentRole, action: 'Restock', amount: amt, bal: item.remaining });
         saveAndRender();
+        activateUndo({ type: 'subtract', id: id, amount: amt });
+    }
+
+    function activateUndo(actionData) {
+        undoStack = actionData;
+        const toast = document.getElementById('undoToast');
+        toast.style.display = 'block';
+        
+        let timeLeft = 60; 
+        document.getElementById('undoTimer').innerText = timeLeft;
+        
+        if (undoInterval) clearInterval(undoInterval);
+        if (undoTimer) clearTimeout(undoTimer);
+        
+        undoInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById('undoTimer').innerText = timeLeft;
+            if(timeLeft <= 0) clearInterval(undoInterval);
+        }, 1000);
+
+        undoTimer = setTimeout(() => {
+            toast.style.display = 'none';
+            undoStack = null;
+        }, 60000); 
+    }
+
+    function performUndo() {
+        if (!undoStack) return;
+        const item = inventory.find(i => i.id === undoStack.id);
+        
+        if (undoStack.type === 'delete') {
+            inventory = inventory.filter(i => i.id !== undoStack.id);
+        } 
+        else if (undoStack.type === 'add' && item) {
+            item.remaining += undoStack.amount;
+            item.usedTotal -= undoStack.amount;
+            item.history.pop(); 
+        } 
+        else if (undoStack.type === 'subtract' && item) {
+            item.qty -= undoStack.amount; // Reduce the "Total In" count as well
+            item.remaining -= undoStack.amount;
+            item.history.pop(); 
+        }
+        
+        saveAndRender();
+        document.getElementById('undoToast').style.display = 'none';
+        undoStack = null;
+        if(undoInterval) clearInterval(undoInterval);
+        alert("Action Undone!");
+    }
+
+    function sendWhatsapp(id) {
+        let item = inventory.find(i => i.id === id);
+        let val = item.remaining * (item.price || 0);
+        let text = `*Inventory Update*\n\n*Item:* ${item.name}\n*Price:* ${item.price || 0}\n*Stock:* ${item.remaining}\n*Value:* ${val}\n*Total Usage:* ${item.usedTotal}\n\nPlease check this item.`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     }
 
     function renderTable() {
@@ -317,33 +738,109 @@
         const search = document.getElementById('searchBar').value.toLowerCase();
         tbody.innerHTML = '';
         let lowCount = 0;
+        let totalValue = 0; 
+
+        const usageHeader = document.getElementById('usageHeader');
+        if (viewingDate) {
+            usageHeader.style.display = 'none'; 
+        } else {
+            usageHeader.style.display = '';
+        }
+
         inventory.forEach(item => {
             if(!item.name.toLowerCase().includes(search)) return;
-            let isLow = item.remaining < 5; if(isLow) lowCount++;
+
+            let displayStock = viewingDate ? getHistoricalStock(item, viewingDate) : item.remaining;
+            let itemVal = displayStock * (item.price || 0);
+            totalValue += itemVal;
+
+            let isLow = displayStock < 5; if(isLow) lowCount++;
+            
+            let actionButtons = '';
+            let usageInputs = '';
+
+            if (viewingDate) {
+                usageInputs = `<span class="text-muted small">History Mode</span>`;
+                actionButtons = `<span class="text-muted">-</span>`;
+            } else {
+                usageInputs = `<div class="input-group input-group-sm input-group-custom" style="width:220px"><input type="number" id="q-${item.id}" class="form-control" placeholder="Qty"><input type="text" id="n-${item.id}" class="form-control" placeholder="Name"><button onclick="useStock(${item.id})" class="btn btn-warning">✔</button></div>`;
+                
+                actionButtons = `
+                    <button onclick="openEditModal(${item.id})" class="btn btn-sm btn-secondary text-white" title="Edit Price/Info">✏️</button>
+                    <button onclick="showHistory(${item.id})" class="btn btn-sm btn-info text-white" title="View History">👁</button> 
+                    <button onclick="sendWhatsapp(${item.id})" class="btn btn-sm btn-success text-white" title="Share on WhatsApp">📱</button>
+                    ${currentRole === 'Admin' ? `<button onclick="deleteItem(${item.id})" class="btn btn-sm btn-outline-danger" title="Delete">×</button>` : ''}
+                `;
+            }
+
             tbody.innerHTML += `
-                <tr class="${isLow ? 'table-danger' : ''}">
+                <tr class="${isLow ? 'row-low-stock' : ''}">
                     <td><strong>${item.name}</strong><br><small>${item.category}</small></td>
-                    <td>${item.qty} ${currentRole === 'Admin' ? `<button onclick="restock(${item.id})" class="btn btn-sm btn-link">➕</button>` : ''}</td>
-                    <td><div class="input-group input-group-sm input-group-custom" style="width:220px"><input type="number" id="q-${item.id}" class="form-control" placeholder="Qty"><input type="text" id="n-${item.id}" class="form-control" placeholder="Name"><button onclick="useStock(${item.id})" class="btn btn-warning">✔</button></div></td>
-                    <td><span class="badge ${isLow ? 'badge-low' : 'bg-success'}">${item.remaining}</span></td>
-                    <td><button onclick="showHistory(${item.id})" class="btn btn-sm btn-info text-white">👁</button> ${currentRole === 'Admin' ? `<button onclick="deleteItem(${item.id})" class="btn btn-sm btn-outline-danger">×</button>` : ''}</td>
+                    <td>
+                        <div class="fw-bold">${displayStock}</div>
+                        ${item.price > 0 ? `<small class="text-success">Val: ${itemVal.toLocaleString()}</small>` : ''}
+                        ${currentRole === 'Admin' && !viewingDate ? `<br><button onclick="restock(${item.id})" class="btn btn-sm btn-link p-0">➕ Add Stock</button>` : ''}
+                    </td>
+                    ${!viewingDate ? `<td>${usageInputs}</td>` : '<td style="display:none"></td>'}
+                    <td><span class="badge ${isLow ? 'badge-low' : 'bg-success'}">${displayStock}</span></td>
+                    <td>${actionButtons}</td>
                 </tr>`;
         });
+        
         document.getElementById('statTotal').innerText = inventory.length;
         document.getElementById('statLow').innerText = lowCount;
-        updateAnalytics();
+        document.getElementById('statValue').innerText = totalValue.toLocaleString();
+        
+        if(!viewingDate) updateAnalytics();
     }
 
     function updateAnalytics() {
-        const sorted = [...inventory].sort((a, b) => b.usedTotal - a.usedTotal).slice(0, 3);
+        // Sort by Used Total (Most popular on top)
+        const sorted = [...inventory].sort((a, b) => b.usedTotal - a.usedTotal);
         const container = document.getElementById('topItemsList');
-        if(!sorted.length || sorted[0].usedTotal === 0) return container.innerHTML = "No usage yet.";
-        container.innerHTML = sorted.map(i => `<span class="badge bg-primary me-2 mb-1">${i.name}: ${i.usedTotal} Used</span>`).join(' ');
+        if(!sorted.length) return container.innerHTML = "<div class='text-muted p-2'>No items found.</div>";
+        
+        // UPDATED SECTION: Shows "Total In" vs "Used"
+        container.innerHTML = sorted.map(i => `
+            <div class="usage-item" onclick="showHistory(${i.id})">
+                <div style="overflow:hidden;">
+                    <span class="fw-bold d-block text-truncate" style="max-width: 120px;">${i.name}</span>
+                    <small class="text-muted" style="font-size:10px;">Current Stock: <b>${i.remaining}</b></small>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-success bg-opacity-75" style="font-size: 10px;">Total In: ${i.qty}</span>
+                    <span class="badge bg-danger bg-opacity-75" style="font-size: 10px;">Used: ${i.usedTotal}</span>
+                </div>
+            </div>
+        `).join('');
+
+        const ctx = document.getElementById('stockChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+        
+        const chartData = sorted.slice(0, 10);
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: chartData.map(i => i.name),
+                datasets: [{
+                    label: 'Current Stock',
+                    data: chartData.map(i => i.remaining),
+                    backgroundColor: '#3498db',
+                    borderRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, display: false }, x: { display: false } }
+            }
+        });
     }
 
     function showHistory(id) {
         let item = inventory.find(i => i.id === id);
-        let html = '<div class="list-group list-group-flush">';
+        let html = `<h6>History: ${item.name} (Price: ${item.price || 0})</h6><div class="list-group list-group-flush">`;
         item.history.slice().reverse().forEach(h => {
             html += `<div class="list-group-item d-flex justify-content-between p-2 small"><div><strong>${h.action} (${h.amount})</strong><br>${h.time}</div><span>Bal: ${h.bal} | By: ${h.user}</span></div>`;
         });
@@ -357,28 +854,30 @@
         }
     }
 
-    // BACKUP AND RESTORE FUNCTIONS
+    function saveAndRender() {
+        localStorage.setItem('MasterInventoryDB', JSON.stringify(inventory)); renderTable();
+    }
+
     function backupData() {
-        const data = {
-            inventory: inventory,
-            settings: settings
-        };
+        const today = new Date().toDateString();
+        localStorage.setItem('IMS_LastBackup_Date', today); 
+
+        const data = { inventory: inventory, settings: settings };
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", "Jaffaz_Backup_" + new Date().toISOString().slice(0,10) + ".json");
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
+        const anchor = document.createElement('a');
+        anchor.href = dataStr;
+        anchor.download = "Inventory_Backup_" + new Date().toISOString().slice(0,10) + ".json";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
     }
 
     function restoreData(input) {
         const file = input.files[0];
         if (!file) return;
         
-        if(!confirm("⚠️ Warning: Data Restore karne se abhi jo data hai woh DELETE ho jayega aur backup file wala data aa jayega. Kya aap sure hain?")) {
-            input.value = ''; // Reset input
-            return;
+        if(!confirm("⚠️ Warning: Restoring data will DELETE current data. Continue?")) {
+            input.value = ''; return;
         }
 
         const reader = new FileReader();
@@ -386,42 +885,36 @@
             try {
                 const data = JSON.parse(e.target.result);
                 if (data.inventory && data.settings) {
-                    // Update Local
                     localStorage.setItem('MasterInventoryDB', JSON.stringify(data.inventory));
                     localStorage.setItem('IMS_Settings', JSON.stringify(data.settings));
-                    
-                    // Update Online (Firebase)
-                    inventory = data.inventory;
-                    settings = data.settings;
-                    db.ref('MasterInventoryDB').set(inventory);
-
-                    alert("✅ Data Safely Restored & Synced Online!");
+                    alert("✅ Data Restored!");
                     location.reload();
                 } else {
-                    alert("❌ Invalid Backup File! Yeh file sahi nahi hai.");
+                    alert("❌ Invalid File.");
                 }
-            } catch (err) {
-                alert("❌ Error reading file.");
-            }
+            } catch (err) { alert("❌ Error reading file."); }
         };
         reader.readAsText(file);
     }
 
     function exportExcel() {
-        let data = inventory.map(i => ({ Item: i.name, Category: i.category, Initial: i.qty, Remaining: i.remaining, Consumed: i.usedTotal }));
+        let data = inventory.map(i => ({ 
+            Item: i.name, 
+            Category: i.category, 
+            Price: i.price || 0,
+            Stock: i.remaining, 
+            StockValue: (i.remaining * (i.price||0)),
+            Consumed: i.usedTotal 
+        }));
         let ws = XLSX.utils.json_to_sheet(data); let wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Stock"); XLSX.writeFile(wb, `${settings.name}.xlsx`);
     }
 
     function exportPDF() {
         const doc = new jsPDF();
-        doc.text(settings.name + " Report", 14, 20);
-        const rows = inventory.map(i => [i.name, i.category, i.qty, i.remaining, i.usedTotal]);
-        doc.autoTable({ startY: 30, head: [['Item', 'Category', 'Initial', 'Balance', 'Used']], body: rows });
-        doc.addPage(); doc.text("History Logs", 14, 20);
-        let logs = []; inventory.forEach(item => item.history.forEach(log => logs.push([log.time, item.name, log.action, log.amount, log.bal, log.user])));
-        logs.sort((a, b) => new Date(b[0]) - new Date(a[0]));
-        doc.autoTable({ startY: 30, head: [['Time', 'Item', 'Action', 'Qty', 'Bal', 'User']], body: logs });
+        doc.text(settings.name + " Valuation Report", 14, 20);
+        const rows = inventory.map(i => [i.name, i.price||0, i.remaining, (i.remaining*(i.price||0)).toLocaleString(), i.usedTotal]);
+        doc.autoTable({ startY: 30, head: [['Item', 'Price', 'Stock', 'Value', 'Used']], body: rows });
         doc.save(`${settings.name}_Report.pdf`);
     }
 </script>
