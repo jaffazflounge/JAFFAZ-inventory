@@ -920,13 +920,17 @@
         localStorage.setItem('IMS_LastBackup_Date', today); 
 
         const data = { inventory: inventory, settings: settings };
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+        // FIXED: Using Blob to handle larger data sizes without crashing
+        const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        
         const anchor = document.createElement('a');
-        anchor.href = dataStr;
+        anchor.href = url;
         anchor.download = "Inventory_Backup_" + new Date().toISOString().slice(0,10) + ".json";
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
+        URL.revokeObjectURL(url);
     }
 
     function restoreData(input) {
@@ -942,12 +946,18 @@
             try {
                 const data = JSON.parse(e.target.result);
                 if (data.inventory && data.settings) {
-                    // 🔥 UPLOAD RESTORED DATA TO FIREBASE
-                    db.ref('inventory_data').set(data.inventory);
-                    db.ref('inventory_settings').set(data.settings);
                     
-                    alert("✅ Data Restored to Online Database!");
-                    location.reload();
+                    // 🔥 FIXED: Wait for Firebase Upload before Reloading
+                    Promise.all([
+                        db.ref('inventory_data').set(data.inventory),
+                        db.ref('inventory_settings').set(data.settings)
+                    ]).then(() => {
+                        alert("✅ Data Restored Successfully!");
+                        location.reload();
+                    }).catch(error => {
+                        alert("❌ Error Restoring: " + error.message);
+                    });
+
                 } else {
                     alert("❌ Invalid File.");
                 }
