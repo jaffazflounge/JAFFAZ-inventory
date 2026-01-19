@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="pageTitle">Inventory Pro Max</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <style>
+        :root { --primary: #2c3e50; --accent: #3498db; }
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; margin: 0; }
+        
+        /* Responsive Sidebar */
+        .sidebar { background: var(--primary); color: white; min-height: 100vh; padding: 20px; width: 250px; transition: all 0.3s; flex-shrink: 0; }
+        .logo-img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid white; margin-bottom: 15px; background: white; }
+        
+        .main-content { padding: 20px; flex-grow: 1; overflow-x: hidden; }
+        
+        .stats-card { border: none; border-radius: 12px; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        .top-item-card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); height: 100%; }
+        
+        /* Table Responsive */
+        .table-responsive { border-radius: 10px; background: white; }
+        .badge-low { background-color: #e74c3c; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.6;} 100% {opacity: 1;} }
+        
+        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a252f; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .admin-controls { display: none; }
+
+        /* Media Queries for Mobile */
+        @media (max-width: 768px) {
+            .sidebar { width: 100%; min-height: auto; padding: 10px; position: relative; }
+            .d-flex-main { flex-direction: column; }
+            .main-content { padding: 15px; }
+            .sidebar .mt-auto { margin-top: 15px !important; }
+            .input-group-custom { width: 100% !important; margin-top: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="loginOverlay">
+    <div class="card p-4 shadow-lg border-0" style="width: 100%; max-width: 380px;">
+        <div class="text-center mb-4">
+            <h4 class="mb-1">🔐 Inventory Login</h4>
+            <small class="text-muted">Enter password to access dashboard</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-bold small">Role Select Karein</label>
+            <select id="userRole" class="form-select text-center mb-3">
+                <option value="Admin">Admin (Full Access)</option>
+                <option value="Staff">Staff (Usage Only)</option>
+            </select>
+            <label class="form-label fw-bold small">Password</label>
+            <input type="password" id="loginPassword" class="form-control text-center" placeholder="PLEASE ENTER 6 DIGITS PASSWORD">
+        </div>
+        <button onclick="login()" class="btn btn-primary w-100 py-2 fw-bold">Login</button>
+        <div id="loginError" class="text-danger small text-center mt-2" style="display:none;">❌ Ghalat Password!</div>
+    </div>
+</div>
+
+<div class="d-flex d-flex-main">
+    <div class="sidebar d-flex flex-column align-items-center shadow">
+        <img id="displayLogo" src="https://cdn-icons-png.flaticon.com/512/2897/2897830.png" class="logo-img">
+        <h5 id="displayBizName" class="text-center mb-3 fw-bold">My Business</h5>
+        <span class="badge bg-warning text-dark mb-4 px-3" id="activeUserBadge">Role</span>
+        <hr class="w-100 text-white d-none d-md-block">
+        <button onclick="location.reload()" class="btn btn-outline-danger btn-sm w-100 mt-md-auto">Logout</button>
+    </div>
+
+    <div class="main-content">
+        <div class="row align-items-center mb-4">
+            <div class="col-6">
+                <h2 id="headerTitle" class="fw-bold m-0 text-dark h4 h2-md">Dashboard</h2>
+            </div>
+            <div class="col-6 text-end admin-controls">
+                <button class="btn btn-dark btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#settingsModal">⚙️ Settings & Backup</button>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-6 text-center">
+                <div class="card stats-card bg-primary p-3">
+                    <small>Total Items</small>
+                    <h2 id="statTotal" class="m-0">0</h2>
+                </div>
+            </div>
+            <div class="col-md-3 col-6 text-center">
+                <div class="card stats-card bg-danger p-3">
+                    <small>Low Stock</small>
+                    <h2 id="statLow" class="m-0">0</h2>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="top-item-card">
+                    <h6 class="text-muted fw-bold small">🔥 Top Usage Items</h6>
+                    <div id="topItemsList" class="mt-1" style="font-size: 0.85rem;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-2 mb-4">
+            <div class="col-6"><button onclick="exportExcel()" class="btn btn-success btn-sm w-100 fw-bold shadow-sm">Excel</button></div>
+            <div class="col-6"><button onclick="exportPDF()" class="btn btn-danger btn-sm w-100 fw-bold shadow-sm">PDF Report</button></div>
+        </div>
+
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-body p-3 p-md-4">
+                <div class="row mb-3 g-2">
+                    <div class="col-md-8 col-12">
+                        <input type="text" id="searchBar" class="form-control" placeholder="Search item..." onkeyup="renderTable()">
+                    </div>
+                    <div class="col-md-4 col-12 admin-controls">
+                        <button class="btn btn-primary w-100 shadow-sm" data-bs-toggle="modal" data-bs-target="#addModal">+ Add Item</button>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle" style="min-width: 600px;">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Item Info</th>
+                                <th>Stock</th>
+                                <th>Usage (Qty/Name)</th>
+                                <th>Balance</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryBody"></tbody>
+                    </table>
+                </div>
+                <div class="text-center mt-2 d-md-none text-muted small">Scroll table left to right ↔️</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5>Add New Item</h5></div>
+            <div class="modal-body">
+                <input type="text" id="iName" class="form-control mb-3" placeholder="Item Name">
+                <input type="number" id="iQty" class="form-control mb-3" placeholder="Stock Qty">
+                <input type="text" id="iCat" class="form-control mb-3" placeholder="Category">
+                <button onclick="addItem()" class="btn btn-primary w-100">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="settingsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content text-center p-3">
+            <h5>Settings</h5>
+            <input type="text" id="setBizName" class="form-control mb-3" placeholder="Business Name">
+            <input type="file" id="logoFile" class="form-control mb-3" accept="image/*" onchange="previewLogo(this)">
+            <img id="logoPreview" src="" style="max-width: 100px; display: none;" class="mb-3 mx-auto rounded border">
+            
+            <hr>
+            <h6 class="text-start">💾 Data Backup & Restore</h6>
+            <button onclick="backupData()" class="btn btn-outline-success w-100 mb-2 fw-bold">📥 Download Backup File</button>
+            <button onclick="document.getElementById('restoreFile').click()" class="btn btn-outline-warning w-100 fw-bold">📤 Restore Data (Upload)</button>
+            <input type="file" id="restoreFile" style="display: none;" onchange="restoreData(this)" accept=".json">
+            <small class="text-danger d-block mt-2" style="font-size: 0.7rem;">Warning: Restore karne se purana data delete ho kar naya aa jayega.</small>
+            <hr>
+            
+            <button onclick="saveSettings()" class="btn btn-dark w-100">Apply Settings</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white"><h5>Logs History</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" id="historyContent"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // --- FIREBASE CONFIGURATION START ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyDs-7Dkorv2R7OTffLygPAdbfn3-Dgjb4I",
+        authDomain: "jaffaz-inventory.firebaseapp.com",
+        databaseURL: "https://jaffaz-inventory-default-rtdb.firebaseio.com",
+        projectId: "jaffaz-inventory",
+        storageBucket: "jaffaz-inventory.firebasestorage.app",
+        messagingSenderId: "955779017403",
+        appId: "1:955779017403:web:ebe32fe48d1b4ef06c979e"
+    };
+
+    // Firebase Initialize
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    // --- FIREBASE CONFIGURATION END ---
+
+    const { jsPDF } = window.jspdf;
+    let inventory = []; // Data will load from Firebase
+    let settings = JSON.parse(localStorage.getItem('IMS_Settings')) || { 
+        name: 'Inventory Pro Max', 
+        logo: 'https://cdn-icons-png.flaticon.com/512/2897/2897830.png' 
+    };
+    let currentRole = "Staff";
+    let tempLogoBase64 = settings.logo;
+
+    // --- ONLINE DATA FUNCTIONS ---
+    function loadOnlineData() {
+        // Firebase se data sunna (Listen)
+        db.ref('MasterInventoryDB').on('value', (snapshot) => {
+            const data = snapshot.val();
+            inventory = data ? Object.values(data) : [];
+            renderTable();
+        });
+    }
+
+    function saveAndRender() {
+        // Online Save
+        db.ref('MasterInventoryDB').set(inventory);
+        // Local Backup (Safety ke liye)
+        localStorage.setItem('MasterInventoryDB', JSON.stringify(inventory)); 
+        renderTable();
+    }
+    // ----------------------------
+
+    function applyBranding() {
+        document.getElementById('displayBizName').innerText = settings.name;
+        document.getElementById('headerTitle').innerText = settings.name;
+        document.getElementById('displayLogo').src = settings.logo;
+        document.getElementById('setBizName').value = settings.name;
+    }
+
+    function previewLogo(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                tempLogoBase64 = e.target.result;
+                document.getElementById('logoPreview').src = tempLogoBase64;
+                document.getElementById('logoPreview').style.display = 'block';
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function login() {
+        const pass = document.getElementById('loginPassword').value;
+        const role = document.getElementById('userRole').value;
+        const error = document.getElementById('loginError');
+        
+        if ((role === "Admin" && pass === "998877") || (role === "Staff" && pass === "554433")) {
+            currentRole = role;
+            document.getElementById('activeUserBadge').innerText = currentRole;
+            document.getElementById('loginOverlay').style.display = 'none';
+            if(currentRole === "Admin") document.querySelectorAll('.admin-controls').forEach(c => c.style.display = 'block');
+            applyBranding();
+            
+            // Login Successful - Load Data from Firebase
+            loadOnlineData();
+            
+        } else {
+            error.style.display = 'block';
+        }
+    }
+
+    function saveSettings() {
+        settings.name = document.getElementById('setBizName').value || settings.name;
+        settings.logo = tempLogoBase64;
+        localStorage.setItem('IMS_Settings', JSON.stringify(settings));
+        applyBranding();
+        bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+        alert("Applied!");
+    }
+
+    function addItem() {
+        let name = document.getElementById('iName').value;
+        let qty = parseFloat(document.getElementById('iQty').value);
+        let cat = document.getElementById('iCat').value || "General";
+        if(!name || isNaN(qty)) return;
+        inventory.push({ id: Date.now(), name, qty, category: cat, remaining: qty, usedTotal: 0, 
+            history: [{ time: new Date().toLocaleString(), user: currentRole, action: 'Initial', amount: qty, bal: qty }] 
+        });
+        saveAndRender();
+        bootstrap.Modal.getInstance(document.getElementById('addModal')).hide();
+    }
+
+    function useStock(id) {
+        let q = parseFloat(document.getElementById(`q-${id}`).value);
+        let n = document.getElementById(`n-${id}`).value;
+        if(isNaN(q) || !n) return;
+        let item = inventory.find(i => i.id === id);
+        if(q > item.remaining) return alert("Low Stock!");
+        item.remaining -= q; item.usedTotal += q;
+        item.history.push({ time: new Date().toLocaleString(), user: n, action: 'Usage', amount: q, bal: item.remaining });
+        saveAndRender();
+    }
+
+    function restock(id) {
+        let amt = parseFloat(prompt("Add Qty:"));
+        if(isNaN(amt)) return;
+        let item = inventory.find(i => i.id === id);
+        item.qty += amt; item.remaining += amt;
+        item.history.push({ time: new Date().toLocaleString(), user: currentRole, action: 'Restock', amount: amt, bal: item.remaining });
+        saveAndRender();
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('inventoryBody');
+        const search = document.getElementById('searchBar').value.toLowerCase();
+        tbody.innerHTML = '';
+        let lowCount = 0;
+        inventory.forEach(item => {
+            if(!item.name.toLowerCase().includes(search)) return;
+            let isLow = item.remaining < 5; if(isLow) lowCount++;
+            tbody.innerHTML += `
+                <tr class="${isLow ? 'table-danger' : ''}">
+                    <td><strong>${item.name}</strong><br><small>${item.category}</small></td>
+                    <td>${item.qty} ${currentRole === 'Admin' ? `<button onclick="restock(${item.id})" class="btn btn-sm btn-link">➕</button>` : ''}</td>
+                    <td><div class="input-group input-group-sm input-group-custom" style="width:220px"><input type="number" id="q-${item.id}" class="form-control" placeholder="Qty"><input type="text" id="n-${item.id}" class="form-control" placeholder="Name"><button onclick="useStock(${item.id})" class="btn btn-warning">✔</button></div></td>
+                    <td><span class="badge ${isLow ? 'badge-low' : 'bg-success'}">${item.remaining}</span></td>
+                    <td><button onclick="showHistory(${item.id})" class="btn btn-sm btn-info text-white">👁</button> ${currentRole === 'Admin' ? `<button onclick="deleteItem(${item.id})" class="btn btn-sm btn-outline-danger">×</button>` : ''}</td>
+                </tr>`;
+        });
+        document.getElementById('statTotal').innerText = inventory.length;
+        document.getElementById('statLow').innerText = lowCount;
+        updateAnalytics();
+    }
+
+    function updateAnalytics() {
+        const sorted = [...inventory].sort((a, b) => b.usedTotal - a.usedTotal).slice(0, 3);
+        const container = document.getElementById('topItemsList');
+        if(!sorted.length || sorted[0].usedTotal === 0) return container.innerHTML = "No usage yet.";
+        container.innerHTML = sorted.map(i => `<span class="badge bg-primary me-2 mb-1">${i.name}: ${i.usedTotal} Used</span>`).join(' ');
+    }
+
+    function showHistory(id) {
+        let item = inventory.find(i => i.id === id);
+        let html = '<div class="list-group list-group-flush">';
+        item.history.slice().reverse().forEach(h => {
+            html += `<div class="list-group-item d-flex justify-content-between p-2 small"><div><strong>${h.action} (${h.amount})</strong><br>${h.time}</div><span>Bal: ${h.bal} | By: ${h.user}</span></div>`;
+        });
+        document.getElementById('historyContent').innerHTML = html + '</div>';
+        new bootstrap.Modal(document.getElementById('historyModal')).show();
+    }
+
+    function deleteItem(id) {
+        if (prompt("Enter Password (9988):") === "9988") {
+            inventory = inventory.filter(i => i.id !== id); saveAndRender();
+        }
+    }
+
+    // BACKUP AND RESTORE FUNCTIONS
+    function backupData() {
+        const data = {
+            inventory: inventory,
+            settings: settings
+        };
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "Jaffaz_Backup_" + new Date().toISOString().slice(0,10) + ".json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    function restoreData(input) {
+        const file = input.files[0];
+        if (!file) return;
+        
+        if(!confirm("⚠️ Warning: Data Restore karne se abhi jo data hai woh DELETE ho jayega aur backup file wala data aa jayega. Kya aap sure hain?")) {
+            input.value = ''; // Reset input
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (data.inventory && data.settings) {
+                    // Update Local
+                    localStorage.setItem('MasterInventoryDB', JSON.stringify(data.inventory));
+                    localStorage.setItem('IMS_Settings', JSON.stringify(data.settings));
+                    
+                    // Update Online (Firebase)
+                    inventory = data.inventory;
+                    settings = data.settings;
+                    db.ref('MasterInventoryDB').set(inventory);
+
+                    alert("✅ Data Safely Restored & Synced Online!");
+                    location.reload();
+                } else {
+                    alert("❌ Invalid Backup File! Yeh file sahi nahi hai.");
+                }
+            } catch (err) {
+                alert("❌ Error reading file.");
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function exportExcel() {
+        let data = inventory.map(i => ({ Item: i.name, Category: i.category, Initial: i.qty, Remaining: i.remaining, Consumed: i.usedTotal }));
+        let ws = XLSX.utils.json_to_sheet(data); let wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Stock"); XLSX.writeFile(wb, `${settings.name}.xlsx`);
+    }
+
+    function exportPDF() {
+        const doc = new jsPDF();
+        doc.text(settings.name + " Report", 14, 20);
+        const rows = inventory.map(i => [i.name, i.category, i.qty, i.remaining, i.usedTotal]);
+        doc.autoTable({ startY: 30, head: [['Item', 'Category', 'Initial', 'Balance', 'Used']], body: rows });
+        doc.addPage(); doc.text("History Logs", 14, 20);
+        let logs = []; inventory.forEach(item => item.history.forEach(log => logs.push([log.time, item.name, log.action, log.amount, log.bal, log.user])));
+        logs.sort((a, b) => new Date(b[0]) - new Date(a[0]));
+        doc.autoTable({ startY: 30, head: [['Time', 'Item', 'Action', 'Qty', 'Bal', 'User']], body: logs });
+        doc.save(`${settings.name}_Report.pdf`);
+    }
+</script>
+</body>
+</html>
